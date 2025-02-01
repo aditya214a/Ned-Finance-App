@@ -1,7 +1,9 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:developer';
+import 'dart:developer' as dev;
 
 import 'package:ned_flutter_app/results.dart';
 
@@ -35,8 +37,11 @@ class _FinancingScreenState extends State<FinancingScreen> {
 
   int _loanAmount = 50000;
   double revenue = 250000;
-  double _loanMax = 83333; // Default max value
+  int _loanMax = 83333; // Default max value
   double _revenueVal = 1; // Default max value
+  double _loanMin = 1.0;
+  double _revenuePercentMin = 0;
+  double _revenuePercentMax = 0;
 
   String repaymentDelay = '30 days';
   String fundUsage = 'Marketing';
@@ -54,10 +59,20 @@ class _FinancingScreenState extends State<FinancingScreen> {
   /// Function to dynamically update the loan amount slider max
   void _updateMaxLoanAmount() {
     setState(() {
+      double loanMaxVal = 80000;
       double revenueValue = double.tryParse(_revenueController.text) ?? 0;
-      _loanMax = (revenueValue / 3).clamp(50000, double.infinity);
+
+      _loanMin = double.parse(_configData?['funding_amount_min']['value']);
+      loanMaxVal = (revenueValue / 3).clamp(
+          _loanMin,
+          double
+              .infinity); // Calculate max value of slider clamping it to _loanMin to avoid error for slider
+      _loanMax = min(
+          int.parse(_configData?['funding_amount_max']['value']),
+          (loanMaxVal / 1000.0).toInt() *
+              1000); //Bonus: Limit max to 750000  and keep it to neatest 1000s
       _revenueVal = revenueValue;
-      _loanAmount = (_loanMax / 2).toInt();
+      _loanAmount = int.parse(_configData?['funding_amount_min']['value']);
     });
   }
 
@@ -82,28 +97,34 @@ class _FinancingScreenState extends State<FinancingScreen> {
         };
         setState(() {
           _configData = parsedData;
+          // BONUS Setting limits from json object for shared percent
+          _revenuePercentMin =
+              double.parse(_configData?['revenue_percentage_min']['value']);
+          _revenuePercentMax =
+              double.parse(_configData?['revenue_percentage_max']['value']);
         });
 
-        // log("${_configData?["revenue_amount"]['label']}");
+        // dev.log("${_configData?["revenue_amount"]['label']}");
       } else {
         throw Exception('Failed to load configuration');
       }
     } catch (error) {
-      log('Error fetching config: $error');
+      dev.log('Error fetching config: $error');
     }
   }
 
   void _submitForm() {
     if (_formKey.currentState!.validate()) {
-      // TODO MAKE IT DYNAMIC
       Map<String, dynamic> resultData = {
         'annual_revenue': _revenueVal,
         'loan': _loanAmount,
         'fee_percent':
             double.parse(_configData?['desired_fee_percentage']['value']),
         'revenue_share_frequency': isMonthly ? 12 : 52,
+        // BONUS Keep percent in limits from the json data
         'revenue_percentage':
-            (100 * (0.156 / 6.2055 / _revenueVal) * (_loanAmount * 10)),
+            (100 * (0.156 / 6.2055 / _revenueVal) * (_loanAmount * 10))
+                .clamp(_revenuePercentMin, _revenuePercentMax),
         'repayment_delay': int.parse(repaymentDelay.split(' ')[0]),
       };
 
@@ -147,9 +168,12 @@ class _FinancingScreenState extends State<FinancingScreen> {
                         Expanded(
                           child: Slider(
                             value: _loanAmount.toDouble(),
-                            min: 1,
-                            max: (_loanMax / 1000.0).toInt() * 1000,
-                            divisions: (_loanMax / 1000).toInt(),
+                            // min: 1,
+                            min: _loanMin,
+                            // max: (_loanMaxVal / 1000.0).toInt() * 1000,
+                            max: _loanMax.toDouble(),
+                            divisions:
+                                max(1, ((_loanMax - _loanMin) / 1000).toInt()),
                             label: _loanAmount.toString(),
                             onChanged: (double newValue) {
                               setState(() {
@@ -162,7 +186,7 @@ class _FinancingScreenState extends State<FinancingScreen> {
                       ],
                     ),
                     Text(
-                        'Revenue share percentage: ${_revenueVal != 0 ? '${(100 * (0.156 / 6.2055 / _revenueVal) * (_loanAmount * 10)).toStringAsFixed(2)}%' : ''}'),
+                        'Revenue share percentage: ${_revenueVal != 0 ? '${(100 * (0.156 / 6.2055 / _revenueVal) * (_loanAmount * 10)).clamp(_revenuePercentMin, _revenuePercentMax).toStringAsFixed(2)}%' : ''}'),
                     SizedBox(height: 20),
                     Text('Revenue Shared Frequency'),
                     Row(
@@ -228,7 +252,8 @@ class _FinancingScreenState extends State<FinancingScreen> {
                           child: TextFormField(
                             controller: _amountController,
                             keyboardType: TextInputType.number,
-                            decoration: InputDecoration(hintText: 'Amount'),
+                            decoration: InputDecoration(
+                                prefixText: '\$', hintText: 'Amount'),
                             // validator: (value) =>
                             //     value!.isEmpty ? 'Required' : null,
                           ),
@@ -236,15 +261,18 @@ class _FinancingScreenState extends State<FinancingScreen> {
                         IconButton(
                           icon: Icon(Icons.add),
                           onPressed: () {
-                            setState(() {
-                              fundEntries.add({
-                                'category': fundUsage,
-                                'description': _descriptionController.text,
-                                'amount': _amountController.text
+                            if (_descriptionController.text.trim() != "" &&
+                                _amountController.text.trim() != "\$") {
+                              setState(() {
+                                fundEntries.add({
+                                  'category': fundUsage,
+                                  'description': _descriptionController.text,
+                                  'amount': '\$${_amountController.text}'
+                                });
+                                _descriptionController.clear();
+                                _amountController.clear();
                               });
-                              _descriptionController.clear();
-                              _amountController.clear();
-                            });
+                            }
                           },
                         ),
                       ],

@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'dart:developer' as developer;
+import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -15,8 +15,8 @@ class ResultsScreen extends StatelessWidget {
     double feePercent = data['fee_percent'];
     int revenueShareFrequency = data['revenue_share_frequency'];
     double revenueSharedPercent = data['revenue_percentage'] / 100;
+
     int repaymentDelay = data['repayment_delay'];
-    // developer.log('$repaymentDelay');
 
     double fees = feePercent * loan;
     double totalRevenueShare = loan + fees;
@@ -50,8 +50,6 @@ class ResultsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Results',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             SizedBox(height: 10),
             _buildResultRow('Annual Business Revenue',
                 '\$${annualRevenue.toStringAsFixed(2)}'),
